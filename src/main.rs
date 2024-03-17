@@ -17,6 +17,10 @@ use std::{
 
 const DATA_FILE: &str = "/tmp/test.txt";
 const DEFAULT_DATA: &[u8] = b"ffffff";
+/**
+* In milliseconds
+*/
+const FILE_REFRESH_INTERVAL: u64 = 200;
 
 
 #[tokio::main]
@@ -70,7 +74,7 @@ async fn main() {
         if changed {
             signal.notify_waiters();
         }
-        sleep(Duration::from_millis(200)).await;
+        sleep(Duration::from_millis(FILE_REFRESH_INTERVAL)).await;
     }
 }
 
