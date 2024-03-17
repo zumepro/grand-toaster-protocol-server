@@ -48,7 +48,7 @@ async fn main() {
     // Create pipe
     let _ = tokio::fs::remove_file(DATA_PIPE).await;
     let output = tokio::process::Command::new("mkfifo")
-        .arg("/tmp/toaster_stream")
+        .arg(DATA_PIPE)
         .output()
         .await.expect("Could not create the named pipe");
     if !output.status.success() {
