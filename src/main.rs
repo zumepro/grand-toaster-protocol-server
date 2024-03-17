@@ -4,29 +4,21 @@ mod future;
 use tokio::{
     net::TcpListener,
     sync::{Notify, RwLock},
-    time::sleep,
-    fs::read,
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-    fs::File,
-    io::Write,
-};
+use std::{sync::Arc, io::Read};
 
 
-const DATA_FILE: &str = "/tmp/test.txt";
-const DEFAULT_DATA: &[u8] = b"ffffff";
+const DATA_PIPE: &str = "/tmp/toaster_stream";
 /**
 * In milliseconds
 */
-const FILE_REFRESH_INTERVAL: u64 = 200;
+const DEBOUNCE_TIMEOUT: u64 = 200;
 
 
 #[tokio::main]
 async fn main() {
     // Initialize signals and set listening addresses
-    let bind_addresses: Vec<&str> = vec!["[2a01:4f8:c013:2b4d::1]:42069", "128.140.61.250:42069"];
+    let bind_addresses: Vec<&str> = vec!["[::1]:42069", "127.0.0.1:42069"];
     let signal = Arc::new(Notify::new());
     let colors: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(vec![255, 255, 255]));
 
@@ -53,29 +45,40 @@ async fn main() {
         });
     }
 
-    // Create and write to data file (as this program should run as a service)
-    let mut file = File::create(DATA_FILE).expect("Could not create data file");
-    file.write_all(DEFAULT_DATA).expect("Could not write default values to data file");
+    // Create pipe
+    let _ = tokio::fs::remove_file(DATA_PIPE).await;
+    let output = tokio::process::Command::new("mkfifo")
+        .arg("/tmp/toaster_stream")
+        .output()
+        .await.expect("Could not create the named pipe");
+    if !output.status.success() {
+        panic!("Could not create the named pipe");
+    }
 
-    // Wait for file changes and for data transfer completion
+    // Wait for changes and for data transfer completion
     loop {
+        let contents = read_from_pipe(DATA_PIPE).await.expect("Could not read from data pipe");
         let mut lock = colors.write().await;
-        let contents = read(DATA_FILE).await.expect("Could not read from data file");
-        let mut changed: bool = false;
         for i in 0..3 {
             let Ok(hex_value) = hex_chars_to_u8(contents[i * 2], contents[i * 2 + 1]) else {
-                panic!("Data file structure is invalid");
+                panic!("Data pipe stream structure is invalid");
             };
-            if hex_value != lock[i] {
-                changed = true;
-                lock[i] = hex_value;
-            }
+            lock[i] = hex_value;
         }
-        if changed {
-            signal.notify_waiters();
-        }
-        sleep(Duration::from_millis(FILE_REFRESH_INTERVAL)).await;
+        signal.notify_waiters();
+        tokio::time::sleep(tokio::time::Duration::from_millis(DEBOUNCE_TIMEOUT)).await;
     }
+}
+
+
+async fn read_from_pipe(path: &str) -> std::io::Result<Vec<u8>> {
+    let path = path.to_string();
+    tokio::task::spawn_blocking(move || {
+        let mut file = std::fs::File::open(path)?;
+        let mut contents = vec![];
+        file.read_to_end(&mut contents)?;
+        Ok(contents)
+    }).await?
 }
 
 
