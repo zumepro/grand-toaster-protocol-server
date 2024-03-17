@@ -8,7 +8,7 @@ pub struct Pending {}
 
 
 impl Future for Pending {
-    type Output = bool;
+    type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         Poll::Pending

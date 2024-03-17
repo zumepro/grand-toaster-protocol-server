@@ -2,7 +2,7 @@ use tokio::{
     net::TcpStream,
     io::{AsyncReadExt, AsyncWriteExt},
     time::timeout,
-    sync::{Notify, Mutex},
+    sync::{Notify, RwLock},
 };
 use std::{
     time::Duration,
@@ -28,10 +28,8 @@ macro_rules! write_or_return {
 
 macro_rules! write_colors {
     ($stream:ident, $colors:ident) => {{
-        let lock = $colors.lock().await;
-        let current_colors: Vec<u8> = lock.clone();
-        drop(lock);
-        match timeout(Duration::from_secs(SOCKET_IO_TIMEOUT), $stream.write_all(&current_colors[..3])).await {
+        let lock = $colors.read().await;
+        match timeout(Duration::from_secs(SOCKET_IO_TIMEOUT), $stream.write_all(&lock[..3])).await {
             Ok(Ok(_)) => {},
             _ => return,
         }
@@ -39,7 +37,7 @@ macro_rules! write_colors {
 }
 
 
-pub async fn handle_client(mut stream: TcpStream, signal: Arc<Notify>, colors: Arc<Mutex<Vec<u8>>>) {
+pub async fn handle_client(mut stream: TcpStream, signal: Arc<Notify>, colors: Arc<RwLock<Vec<u8>>>) {
     // Connection preface phase
     write_or_return!(stream, "GTP_4.2 SRV\r\n");
     let mut buf = String::new();
@@ -50,7 +48,10 @@ pub async fn handle_client(mut stream: TcpStream, signal: Arc<Notify>, colors: A
     let Ok((received, _)) = read_line(&mut stream, &mut buf, 1).await else { return; };
     if received != "i_am_a_toaster" { return; }
     write_or_return!(stream, "trust_me_bro\r\n");
-    write_colors!(stream, colors);
+    loop {
+        write_colors!(stream, colors);
+        signal.notified().await;
+    }
 }
 
 
