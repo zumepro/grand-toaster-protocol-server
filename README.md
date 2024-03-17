@@ -1,0 +1,1 @@
+# Grand toaster protocol (server implementation)
