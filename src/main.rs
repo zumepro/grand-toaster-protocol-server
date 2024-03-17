@@ -26,7 +26,7 @@ const FILE_REFRESH_INTERVAL: u64 = 200;
 #[tokio::main]
 async fn main() {
     // Initialize signals and set listening addresses
-    let bind_addresses: Vec<&str> = vec!["[::1]:42069", "127.0.0.1:42069"];
+    let bind_addresses: Vec<&str> = vec!["[2a01:4f8:c013:2b4d::1]:42069", "128.140.61.250:42069"];
     let signal = Arc::new(Notify::new());
     let colors: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(vec![255, 255, 255]));
 
